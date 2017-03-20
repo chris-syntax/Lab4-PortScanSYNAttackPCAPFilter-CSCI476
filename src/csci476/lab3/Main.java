@@ -7,7 +7,10 @@ import org.jnetpcap.packet.format.FormatUtils;
 import org.jnetpcap.protocol.network.Ip4;
 import org.jnetpcap.protocol.tcpip.Tcp;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.Map;
 
 public class Main {
 
@@ -79,13 +82,32 @@ public class Main {
                     //Check if this is a SYN-ACK packet.
                     else if(packet.getByte(47) == 0x12) {
                         captureData.synackPacketCount++;
-                        //Preallocate a TCP header
+                        //Preallocate a TCP and IPv4 header
                         Tcp tcp = new Tcp();
-                        //Shove this packet's TCP information into tcp.
+                        Ip4 ip4 = new Ip4();
+                        //Shove this packet's TCP and IPv4 information into tcp and ip4.
                         packet.getHeader(tcp);
+                        packet.getHeader(ip4);
                         //This is a SYNACK for some SYN on the stack. Lets find it, starting
                         // from the top of the stack.
-
+                        //Not sure if this is in the right order yet. It should be searching in LIFO order. Not a huge deal if it doesn't, just slower.
+                        for(Tcp old : captureData.synPacketsWithoutAck) {
+                            if(old.seq() + 1 == tcp.ack()) {
+                                //Found a matching ack. We need to pull this item from the stack.
+                                captureData.synPacketsWithoutAck.remove(old);
+                                //Decrement the SYN without ACK count for this IP. (Its the destination IP of this packet).
+                                captureData.ipsWithoutResponses.get(FormatUtils.ip(ip4.destination())).value--;
+                                //Increment the number of SYNACKs for this IP.
+                                if(captureData.ipsWithResponses.containsKey(FormatUtils.ip(ip4.destination()))) {
+                                    captureData.ipsWithResponses.get(FormatUtils.ip(ip4.destination())).value++;
+                                } else {
+                                    captureData.ipsWithResponses.put(FormatUtils.ip(ip4.destination()), new CaptureData.MutableInt());
+                                }
+                                //All set.
+                                return;
+                            }
+                        }
+                        System.err.println("Found a SYNACK without a matching SYN. Ignored.");
                     }
                 }
 
@@ -115,5 +137,34 @@ public class Main {
         System.out.println("Number of TCP packets read: " + captureData.packetCount);
         System.out.println("Number of SYN packets read: " + captureData.synPacketCount);
         System.out.println("Number of SYN-ACK packets read: " + captureData.synackPacketCount);
+
+        System.out.println("Evaluating unassociated SYNs.");
+
+        ArrayList<String> badIps = new ArrayList<>();
+
+        //Lets iterate though our IP hash maps:
+        Iterator it = captureData.ipsWithoutResponses.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry pair = (Map.Entry)it.next();
+            //Look for this entry in the withResponses map
+            if(captureData.ipsWithResponses.containsKey(pair.getKey().toString())) {
+                //Its in here, lets compare the values.
+                //If the amount of SYNs without acks is greater than 3x the ones with acks, its a bad IP.
+                if(captureData.ipsWithResponses.get(pair.getKey().toString()).value * 3 < ((CaptureData.MutableInt) pair.getValue()).value) {
+                    badIps.add(pair.getKey().toString());
+                }
+            } else {
+                //This would be the case where an IP never received a response.
+                if(((CaptureData.MutableInt) pair.getValue()).value >= 1) {
+                    badIps.add(pair.getKey().toString());
+                }
+            }
+            it.remove(); // avoids a ConcurrentModificationException
+        }
+
+        System.out.println("\nPossible SYN scanning IPs:\n");
+        for(String ip : badIps) {
+            System.out.println(ip);
+        }
     }
 }

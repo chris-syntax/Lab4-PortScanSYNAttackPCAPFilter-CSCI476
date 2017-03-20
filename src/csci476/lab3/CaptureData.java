@@ -2,6 +2,7 @@ package csci476.lab3;
 
 import org.jnetpcap.protocol.tcpip.Tcp;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Stack;
@@ -14,10 +15,10 @@ public class CaptureData {
     public int synPacketCount = 0;
     public int synackPacketCount = 0;
 
-    //Use a stack, because responses are likely to be for the most recently received SYN.
+    //Use a stack (ArrayDeque is like a stack), because responses are likely to be for the most recently received SYN.
     //Stores all SYN packets we've seen so far without any sort of response.
     //Shrinks and grows as more SYNs and responses are found.
-    public Stack<Tcp> synPacketsWithoutAck = new Stack<Tcp>();
+    public ArrayDeque<Tcp> synPacketsWithoutAck = new ArrayDeque<>();
     //Store a count of how many times a host has created a SYN without a response.
     //Key: String: IP Address
     //Value: integer count of SYNs without ACKs.
