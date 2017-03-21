@@ -14,18 +14,21 @@ import java.util.Map;
 
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         /***************************************************************************
          * First we setup error buffer and name for our file
          **************************************************************************/
         final StringBuilder errbuf = new StringBuilder(); // For any error msgs
-        String file = "dump.pcap";
+        String file = null;
         try {
-            file = args[1];
+            file = args[0];
         } catch (Exception e) {
 
         }
 
+        if(file == null) {
+            throw new Exception("No file specified.");
+        }
 
         System.out.printf("Opening file for reading: %s%n", file);
 
